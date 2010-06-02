@@ -1,15 +1,17 @@
 #!/usr/bin/python
 
+import httplib2
 import os
 import sys
 import urllib
+import urlparse
 try:
     import json
 except ImportError:
     import simplejson as json
 
 
-API_URL = 'http://api.bit.ly/v3'
+API_URL = 'http://api.bit.ly/v3/'
 
 class APIError (Exception):
     '''Raised by BitLy instances in the event of errors returned by the 
@@ -52,11 +54,13 @@ class BitLy (object):
     def __init__ (self, api_user, api_key):
         self.api_user = api_user
         self.api_key = api_key
+        self.http = httplib2.Http()
 
     def _build_query_string(self, kwargs):
         params = {
                 'login'     : self.api_user,
                 'apiKey'    : self.api_key,
+                'format'    : 'json',
                 }
 
         params.update(kwargs)
@@ -73,19 +77,26 @@ class BitLy (object):
         Raise bitly.APIError on errors returned by bit.ly.'''
 
         def _ (**kwargs):
-            url = '/'.join([self.api_url, func])
+            url = urlparse.urljoin(self.api_url, func)
             query_string = self._build_query_string(kwargs)
-            fd = urllib.urlopen(url, query_string)
-            res = json.loads(fd.read())
+            r,c = self.http.request('%s?%s' % (url, query_string))
 
-            if res['status_code'] != 200:
-                raise APIError(
-                        res['status_code'],
-                        res['status_txt'],
-                        res)
-            elif not 'data' in res:
-                raise APIError(-1, 'Unexpected response from bit.ly.', res)
-            return res['data']
+            if r['status'] != '200':
+                raise APIError(r['status'], c)
+
+            try:
+                response = json.loads(c)
+            except ValueError:
+                raise APIError(-1, 'Unexpected response from bit.ly.')
+
+            if 'errorCode' in response:
+                raise APIError(response['error_code'],
+                    response.get('errorMessage', ''))
+
+            try:
+                return response['data']
+            except KeyError:
+                raise APIError(-1, 'Unexpected response from bit.ly.')
         return _
 
 def main():
