@@ -90,7 +90,7 @@ class BitLy (object):
                 raise APIError(-1, 'Unexpected response from bit.ly.')
 
             if 'errorCode' in response:
-                raise APIError(response['error_code'],
+                raise APIError(response['errorCode'],
                     response.get('errorMessage', ''))
 
             try:
